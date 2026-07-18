@@ -1,18 +1,4 @@
-"""
-GENESIS-DSP — Adım 03
-Temel bozunum motoru: CFO, sabit faz kayması ve kompleks AWGN.
 
-Bu program:
-1. Adım 02 standart SignalRecord paketini yükler.
-2. Kompleks taban bant sinyaline taşıyıcı frekans kayması uygular.
-3. Sabit faz kayması uygular.
-4. Hedef SNR değerinde kompleks AWGN ekler.
-5. Gerçekleşen SNR ve güç korunumunu doğrular.
-6. Bozulmuş sinyalleri, gürültüyü, metadata'yı ve grafikleri kaydeder.
-
-Çalıştırma:
-    python 03_basic_impairments.py
-"""
 
 from __future__ import annotations
 
