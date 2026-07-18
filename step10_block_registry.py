@@ -1,19 +1,4 @@
-"""
-GENESIS-DSP — Adım 10
-DSP block registry ve yapılandırmadan blok oluşturma sistemi.
 
-Bu program:
-1. Adım 09'daki DSPBlock altyapısını kullanır.
-2. DSP bloklarını benzersiz block_id ile kaydeder.
-3. Blokları isim, kategori ve kimliğe göre listeler.
-4. JSON-benzeri yapılandırmadan blok nesnesi üretir.
-5. Registry şemasını JSON olarak dışa aktarır.
-6. Duplicate registration, bilinmeyen blok ve hatalı parametre testleri yapar.
-7. Registry üzerinden örnek bir DSP zinciri çalıştırır.
-
-Çalıştırma:
-    python step10_block_registry.py
-"""
 
 from __future__ import annotations
 
