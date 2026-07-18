@@ -1,12 +1,4 @@
-'''GENESIS-DSP — Adım 24
-Tam web uygulaması, raporlama ve benchmark paneli.
 
-Öz test ve site üretimi:
-    python step24_web_application.py
-
-Web sitesini başlat:
-    python step24_web_application.py --serve --open-browser
-'''
 
 from __future__ import annotations
 
