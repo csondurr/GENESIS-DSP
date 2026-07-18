@@ -1,27 +1,4 @@
-"""
-GENESIS-DSP — Adım 20
-Kararlılık, nedensellik ve fiziksel/yapısal kısıt doğrulama sistemi.
 
-Bu program:
-1. Adım 17'de yeniden keşfedilen pipeline'ı yükler.
-2. Mevcut global-ortalama DC removal bloğunun çevrimdışı ve
-   non-causal olduğunu prefix testiyle gösterir.
-3. Causal ve BIBO-stable bir DC blocker bloğu tanımlar.
-4. Pipeline içindeki legacy DC removal bloğunu causal sürümle değiştirir.
-5. Blok ve graph seviyesinde:
-   - prefix causality
-   - BIBO stability
-   - determinism
-   - finite-output
-   - parameter constraints
-   - Nyquist constraint
-   - cycle ve multi-parent rejection
-   testlerini uygular.
-6. Sertifikalı pipeline paketi, test matrisi, rapor ve grafik üretir.
-
-Çalıştırma:
-    python step20_stability_causality_constraints.py
-"""
 
 from __future__ import annotations
 
