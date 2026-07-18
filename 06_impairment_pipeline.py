@@ -1,19 +1,4 @@
-"""
-GENESIS-DSP — Adım 06
-Yeniden kullanılabilir birleşik bozunum pipeline'ı.
 
-Bu program:
-1. Adım 02 temiz SignalRecord paketini yükler.
-2. Bozunumları tek bir yapılandırılmış pipeline içinde sırayla uygular:
-   CFO -> faz -> multipath -> fractional delay -> IQ imbalance
-   -> DC offset -> clipping -> AWGN
-3. Her ara aşamayı saklar.
-4. Aynı seed ile aynı sonucu verdiğini doğrular.
-5. Pipeline konfigürasyonu, veri paketi, metadata ve grafik üretir.
-
-Çalıştırma:
-    python 06_impairment_pipeline.py
-"""
 
 from __future__ import annotations
 
