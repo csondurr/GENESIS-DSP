@@ -1,20 +1,4 @@
-"""
-GENESIS-DSP — Adım 21
-Sabit nokta (fixed-point) dönüşüm ve doğrulama sistemi.
 
-Bu program:
-1. Adım 20'de sertifikalanmış causal pipeline'ı yükler.
-2. Adım 17 test sinyalini kullanarak floating-point referans üretir.
-3. Sample/coefficient word length ve NCO phase word length kombinasyonlarını tarar.
-4. Causal DC blocker, complex gain ve frequency shift bloklarını
-   fixed-point olarak emüle eder.
-5. NMSE, EVM, maksimum hata, saturation ve determinism ölçer.
-6. En düşük maliyetli başarılı fixed-point yapılandırmayı seçer.
-7. JSON config, arama CSV'si, NPZ kayıt, grafik ve rapor üretir.
-
-Çalıştırma:
-    python step21_fixed_point_conversion.py
-"""
 
 from __future__ import annotations
 
