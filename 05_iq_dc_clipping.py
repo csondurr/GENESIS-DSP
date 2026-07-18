@@ -1,19 +1,4 @@
-"""
-GENESIS-DSP — Adım 05
-IQ dengesizliği, DC offset, genlik clipping ve AWGN motoru.
 
-Bu program:
-1. Adım 04 paketini yükler.
-2. Gürültüsüz kanal çıkışına IQ gain/phase imbalance uygular.
-3. Kompleks DC offset ekler.
-4. Genlik sınırlama (hard clipping) uygular.
-5. Hedef SNR seviyesinde kompleks AWGN ekler.
-6. Bozunum ölçümlerini ve doğrulamaları kaydeder.
-7. Veri paketi, metadata ve grafik üretir.
-
-Çalıştırma:
-    python 05_iq_dc_clipping.py
-"""
 
 from __future__ import annotations
 
