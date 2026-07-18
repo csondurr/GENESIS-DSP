@@ -1,18 +1,4 @@
-"""
-GENESIS-DSP — Adım 07
-Merkezi performans metrikleri motoru.
 
-Bu program:
-1. Adım 06 birleşik bozunum veri paketini yükler.
-2. SNR, NMSE, EVM, BER, PAPR ve güç metriklerini hesaplar.
-3. QPSK hard-decision demodülatörüyle kurtarma öncesi BER'i ölçer.
-4. Bilinen CFO/faz ile oracle ölçümü yaparak metrik altyapısını doğrular.
-5. Kontrollü AWGN öz testi çalıştırır.
-6. JSON, CSV ve grafik raporu üretir.
-
-Çalıştırma:
-    python 07_metrics_engine.py
-"""
 
 from __future__ import annotations
 
