@@ -1,20 +1,3 @@
-"""
-GENESIS-DSP — Adım 09
-Ortak DSP block arayüzü.
-
-Bu modül:
-- Bütün DSP bloklarının kullanacağı standart SignalFrame yapısını tanımlar.
-- DSPBlock soyut sınıfını tanımlar.
-- Parametre şeması ve yürütme kayıtlarını oluşturur.
-- Üç örnek blok içerir:
-    DCRemovalBlock
-    ComplexGainBlock
-    FrequencyShiftBlock
-- Kendi öz testini çalıştırır.
-
-Çalıştırma:
-    python step09_dsp_block_interface.py
-"""
 
 from __future__ import annotations
 
