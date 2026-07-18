@@ -1,20 +1,4 @@
-"""
-GENESIS-DSP — Adım 08
-Klasik DSP alıcı baseline'ı.
 
-Bu program:
-1. Adım 06 birleşik bozunum verisini yükler.
-2. Örnek ortalamasıyla DC offset tahmini ve giderimi yapar.
-3. QPSK dördüncü-kuvvet yöntemiyle CFO tahmini yapar.
-4. CFO düzeltmesi ve RRC matched filtering uygular.
-5. Training-aided timing başlangıcı arar.
-6. Widely-linear FIR equalizer eğitir.
-7. Eğitim, doğrulama ve test BER/EVM değerlerini raporlar.
-8. Baseline veri paketi, JSON, CSV ve grafik üretir.
-
-Çalıştırma:
-    python 08_classical_baseline.py
-"""
 
 from __future__ import annotations
 
