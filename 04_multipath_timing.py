@@ -1,18 +1,4 @@
-"""
-GENESIS-DSP — Adım 04
-Çok yollu kanal ve kesirli zamanlama kayması motoru.
 
-Bu program:
-1. Adım 03 paketini yükler.
-2. CFO ve faz kayması uygulanmış sinyali çok yollu kanaldan geçirir.
-3. Kesirli örnek zamanlama kayması uygular.
-4. Kanal sonrasında hedef SNR seviyesinde yeni kompleks AWGN ekler.
-5. Kanal, timing ve SNR doğrulamalarını yapar.
-6. Tüm ground-truth verilerini, metadata'yı ve grafikleri kaydeder.
-
-Çalıştırma:
-    python 04_multipath_timing.py
-"""
 
 from __future__ import annotations
 
