@@ -1,21 +1,3 @@
-"""
-GENESIS-DSP — Adım 18
-Karma bozunumları uçtan uca çözen birleşik alıcı sistemi.
-
-Bu program:
-1. Adım 06'daki gerçek karma bozunum veri setini yükler.
-2. DC offset tahmini ve giderimi yapar.
-3. QPSK dördüncü-kuvvet yöntemiyle CFO tahmini yapar.
-4. CFO düzeltmesi ve RRC matched filtering uygular.
-5. Timing başlangıcını otomatik arar.
-6. Linear ve widely-linear FIR equalizer modellerini karşılaştırır.
-7. Equalizer uzunluğu ve ridge parametresini validation verisiyle seçer.
-8. Ayrı test bölümünde BER, EVM ve NMSE ölçer.
-9. Kurtarma reçetesi, model arama tablosu, veri paketi ve grafik üretir.
-
-Çalıştırma:
-    python step18_combined_recovery.py
-"""
 
 from __future__ import annotations
 
