@@ -1,23 +1,4 @@
-"""
-GENESIS-DSP — Adım 13
-Sürekli parametre optimizasyon motoru.
 
-Bu program:
-1. Adım 12 pipeline paketini yükler.
-2. Graph içindeki sayısal parametreleri bounds içinde optimize eder.
-3. Bounded Differential Evolution kullanır.
-4. Sonucu coordinate-search ile hassaslaştırır.
-5. Optimize edilmiş pipeline paketini kaydeder.
-6. Yakınsama geçmişi, JSON raporu ve grafik üretir.
-
-Bu öz testte optimize edilen parametreler:
-- downconvert.frequency_hz
-- constant_output.gain_real
-- constant_output.gain_imag
-
-Çalıştırma:
-    python step13_continuous_optimizer.py
-"""
 
 from __future__ import annotations
 
