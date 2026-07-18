@@ -1,0 +1,1070 @@
+"""
+GENESIS-DSP — Adım 22
+Bağımsız Python ve C++17 kod dışa aktarma sistemi.
+
+Çalıştırma:
+    python step22_code_export.py
+"""
+
+from __future__ import annotations
+
+import csv
+import hashlib
+import importlib.util
+import json
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+
+from step11_pipeline_graph import PipelineGraph
+from step12_pipeline_serialization import PipelinePackage
+
+
+BASE_DIRECTORY = Path(__file__).resolve().parent
+STEP20_DIRECTORY = BASE_DIRECTORY / "outputs" / "step20"
+STEP21_DIRECTORY = BASE_DIRECTORY / "outputs" / "step21"
+STEP22_DIRECTORY = BASE_DIRECTORY / "outputs" / "step22"
+
+PIPELINE_PATH = STEP20_DIRECTORY / "certified_causal_pipeline.json"
+FIXED_CONFIG_PATH = STEP21_DIRECTORY / "fixed_point_config.json"
+REFERENCE_SIGNALS_PATH = STEP21_DIRECTORY / "fixed_point_signals.npz"
+
+PYTHON_EXPORT_PATH = STEP22_DIRECTORY / "genesis_dsp_export.py"
+CPP_HEADER_PATH = STEP22_DIRECTORY / "genesis_dsp_export.hpp"
+CPP_SOURCE_PATH = STEP22_DIRECTORY / "genesis_dsp_export.cpp"
+CMAKE_PATH = STEP22_DIRECTORY / "CMakeLists.txt"
+INPUT_CSV_PATH = STEP22_DIRECTORY / "test_input_iq.csv"
+EXPECTED_CSV_PATH = STEP22_DIRECTORY / "test_expected_fixed_iq.csv"
+CPP_OUTPUT_PATH = STEP22_DIRECTORY / "test_cpp_output_iq.csv"
+MANIFEST_PATH = STEP22_DIRECTORY / "export_manifest.json"
+REPORT_PATH = STEP22_DIRECTORY / "code_export_report.json"
+
+PYTHON_FLOAT_TOLERANCE = 1e-12
+PYTHON_FIXED_TOLERANCE = 0.0
+CPP_FIXED_TOLERANCE = 2e-12
+
+
+def load_json(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        raise FileNotFoundError(f"JSON dosyası bulunamadı: {path}")
+
+    with path.open("r", encoding="utf-8") as file:
+        document = json.load(file)
+
+    if not isinstance(document, dict):
+        raise TypeError(f"JSON kökü dict olmalıdır: {path}")
+
+    return document
+
+
+def save_json(path: Path, document: dict[str, Any]) -> None:
+    with path.open("w", encoding="utf-8") as file:
+        json.dump(
+            document,
+            file,
+            indent=4,
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+
+
+def load_inputs() -> tuple[
+    PipelineGraph,
+    dict[str, Any],
+    dict[str, Any],
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    float,
+]:
+    if not PIPELINE_PATH.exists():
+        raise FileNotFoundError(
+            f"Adım 20 pipeline bulunamadı: {PIPELINE_PATH}\n"
+            "Önce şu komutu çalıştır:\n"
+            "python step20_stability_causality_constraints.py"
+        )
+
+    if not FIXED_CONFIG_PATH.exists():
+        raise FileNotFoundError(
+            f"Adım 21 fixed-point config bulunamadı: {FIXED_CONFIG_PATH}\n"
+            "Önce şu komutu çalıştır:\n"
+            "python step21_fixed_point_conversion.py"
+        )
+
+    if not REFERENCE_SIGNALS_PATH.exists():
+        raise FileNotFoundError(
+            f"Adım 21 test sinyalleri bulunamadı: {REFERENCE_SIGNALS_PATH}"
+        )
+
+    graph, package_document = PipelinePackage.load(PIPELINE_PATH)
+    fixed_config = load_json(FIXED_CONFIG_PATH)
+
+    with np.load(REFERENCE_SIGNALS_PATH, allow_pickle=False) as package:
+        input_samples = package["input_samples"].astype(np.complex128)
+        floating_output = package["floating_point_output"].astype(
+            np.complex128
+        )
+        fixed_output = package["fixed_point_output"].astype(np.complex128)
+        sample_rate_hz = float(package["sample_rate_hz"])
+
+    return (
+        graph,
+        package_document,
+        fixed_config,
+        input_samples,
+        floating_output,
+        fixed_output,
+        sample_rate_hz,
+    )
+
+
+def ordered_nodes(graph: PipelineGraph) -> list[dict[str, Any]]:
+    config = graph.to_config()
+    node_map = {
+        str(node["node_id"]): node
+        for node in config["nodes"]
+    }
+    nodes = [
+        node_map[node_id]
+        for node_id in graph.topological_order
+    ]
+
+    supported = {
+        "complex_gain",
+        "causal_dc_blocker",
+        "frequency_shift",
+    }
+    unsupported = [
+        str(node["block_id"])
+        for node in nodes
+        if str(node["block_id"]) not in supported
+    ]
+
+    if unsupported:
+        raise ValueError(
+            "Export desteklenmeyen bloklar içeriyor: "
+            + ", ".join(unsupported)
+        )
+
+    return nodes
+
+
+def generate_python_source(
+    nodes: list[dict[str, Any]],
+    fixed_config: dict[str, Any],
+) -> str:
+    arithmetic = fixed_config["arithmetic"]
+    number_format = arithmetic["sample_and_coefficient_format"]
+    pipeline_json = json.dumps(
+        [
+            {
+                "node_id": str(node["node_id"]),
+                "block_id": str(node["block_id"]),
+                "parameters": dict(node.get("parameters", {})),
+            }
+            for node in nodes
+        ],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+
+    template = r'''"""Auto-generated by GENESIS-DSP Step 22."""
+
+from __future__ import annotations
+
+import json
+import numpy as np
+
+PIPELINE = json.loads(__PIPELINE_JSON__)
+TOTAL_BITS = __TOTAL_BITS__
+INTEGER_BITS = __INTEGER_BITS__
+FRACTIONAL_BITS = __FRACTIONAL_BITS__
+PHASE_BITS = __PHASE_BITS__
+
+SCALE = float(2 ** FRACTIONAL_BITS)
+MINIMUM_VALUE = -float(2 ** (INTEGER_BITS - 1))
+MAXIMUM_VALUE = float(2 ** (INTEGER_BITS - 1)) - 1.0 / SCALE
+
+
+def _validate_samples(samples: np.ndarray) -> np.ndarray:
+    array = np.asarray(samples, dtype=np.complex128)
+    if array.ndim != 1:
+        raise ValueError("samples tek boyutlu olmalıdır.")
+    if not np.all(np.isfinite(array.real)):
+        raise ValueError("samples gerçek kısmı sonlu olmalıdır.")
+    if not np.all(np.isfinite(array.imag)):
+        raise ValueError("samples sanal kısmı sonlu olmalıdır.")
+    return array
+
+
+def _quantize_real(values: np.ndarray | float) -> np.ndarray:
+    array = np.asarray(values, dtype=np.float64)
+    clipped = np.clip(array, MINIMUM_VALUE, MAXIMUM_VALUE)
+    return (np.rint(clipped * SCALE) / SCALE).astype(np.float64)
+
+
+def _quantize_complex(values: np.ndarray | complex) -> np.ndarray:
+    array = np.asarray(values, dtype=np.complex128)
+    real_part = (
+        np.rint(np.clip(array.real, MINIMUM_VALUE, MAXIMUM_VALUE) * SCALE)
+        / SCALE
+    )
+    imag_part = (
+        np.rint(np.clip(array.imag, MINIMUM_VALUE, MAXIMUM_VALUE) * SCALE)
+        / SCALE
+    )
+    return (real_part + 1j * imag_part).astype(np.complex128)
+
+
+def process_float(samples: np.ndarray, sample_rate_hz: float) -> np.ndarray:
+    current = _validate_samples(samples).copy()
+    if not np.isfinite(sample_rate_hz) or sample_rate_hz <= 0.0:
+        raise ValueError("sample_rate_hz pozitif ve sonlu olmalıdır.")
+
+    indices = np.arange(len(current), dtype=np.float64)
+
+    for node in PIPELINE:
+        block_id = node["block_id"]
+        parameters = node["parameters"]
+
+        if block_id == "complex_gain":
+            gain = complex(
+                float(parameters.get("gain_real", 1.0)),
+                float(parameters.get("gain_imag", 0.0)),
+            )
+            current = (current * gain).astype(np.complex128)
+
+        elif block_id == "causal_dc_blocker":
+            pole = float(parameters.get("pole_radius", 0.995))
+            output = np.empty_like(current, dtype=np.complex128)
+            previous_input = 0.0 + 0.0j
+            previous_output = 0.0 + 0.0j
+
+            for index, value in enumerate(current):
+                result = value - previous_input + pole * previous_output
+                output[index] = result
+                previous_input = complex(value)
+                previous_output = complex(result)
+
+            current = output
+
+        elif block_id == "frequency_shift":
+            frequency_hz = float(parameters.get("frequency_hz", 0.0))
+            initial_phase_degrees = float(
+                parameters.get("initial_phase_degrees", 0.0)
+            )
+            phase = (
+                2.0 * np.pi * frequency_hz * indices / sample_rate_hz
+                + np.deg2rad(initial_phase_degrees)
+            )
+            current = (current * np.exp(1j * phase)).astype(np.complex128)
+
+        else:
+            raise ValueError(f"Desteklenmeyen blok: {block_id}")
+
+    return current
+
+
+def process_fixed(samples: np.ndarray, sample_rate_hz: float) -> np.ndarray:
+    current = _quantize_complex(_validate_samples(samples))
+    if not np.isfinite(sample_rate_hz) or sample_rate_hz <= 0.0:
+        raise ValueError("sample_rate_hz pozitif ve sonlu olmalıdır.")
+
+    for node in PIPELINE:
+        block_id = node["block_id"]
+        parameters = node["parameters"]
+
+        if block_id == "complex_gain":
+            gain = complex(
+                float(parameters.get("gain_real", 1.0)),
+                float(parameters.get("gain_imag", 0.0)),
+            )
+            q_gain = complex(
+                _quantize_complex(
+                    np.asarray([gain], dtype=np.complex128)
+                )[0]
+            )
+            current = _quantize_complex(current * q_gain)
+
+        elif block_id == "causal_dc_blocker":
+            pole = float(
+                _quantize_real(
+                    np.asarray(
+                        [float(parameters.get("pole_radius", 0.995))],
+                        dtype=np.float64,
+                    )
+                )[0]
+            )
+            output = np.empty_like(current, dtype=np.complex128)
+            previous_input = 0.0 + 0.0j
+            previous_output = 0.0 + 0.0j
+
+            for index, value in enumerate(current):
+                current_input = complex(
+                    _quantize_complex(
+                        np.asarray([value], dtype=np.complex128)
+                    )[0]
+                )
+                result = (
+                    current_input
+                    - previous_input
+                    + pole * previous_output
+                )
+                current_output = complex(
+                    _quantize_complex(
+                        np.asarray([result], dtype=np.complex128)
+                    )[0]
+                )
+                output[index] = current_output
+                previous_input = current_input
+                previous_output = current_output
+
+            current = output
+
+        elif block_id == "frequency_shift":
+            frequency_hz = float(parameters.get("frequency_hz", 0.0))
+            initial_phase_degrees = float(
+                parameters.get("initial_phase_degrees", 0.0)
+            )
+            phase_modulus = 1 << PHASE_BITS
+            increment_word = int(
+                np.rint(frequency_hz / sample_rate_hz * phase_modulus)
+            )
+            initial_phase_word = int(
+                np.rint(initial_phase_degrees / 360.0 * phase_modulus)
+            )
+            phase_words = (
+                initial_phase_word
+                + increment_word * np.arange(len(current), dtype=np.int64)
+            ) % phase_modulus
+            phase = (
+                2.0
+                * np.pi
+                * phase_words.astype(np.float64)
+                / phase_modulus
+            )
+            oscillator = _quantize_complex(
+                np.exp(1j * phase).astype(np.complex128)
+            )
+            current = _quantize_complex(current * oscillator)
+
+        else:
+            raise ValueError(f"Desteklenmeyen blok: {block_id}")
+
+    return current
+'''
+
+    return (
+        template
+        .replace("__PIPELINE_JSON__", repr(pipeline_json))
+        .replace("__TOTAL_BITS__", str(int(number_format["total_bits"])))
+        .replace("__INTEGER_BITS__", str(int(number_format["integer_bits"])))
+        .replace(
+            "__FRACTIONAL_BITS__",
+            str(int(number_format["fractional_bits"])),
+        )
+        .replace(
+            "__PHASE_BITS__",
+            str(int(arithmetic["nco_phase_accumulator_bits"])),
+        )
+    )
+
+
+def generate_cpp_header() -> str:
+    return '''#pragma once
+
+#include <complex>
+#include <vector>
+
+namespace genesis_dsp {
+
+using Complex = std::complex<double>;
+
+std::vector<Complex> process_float(
+    const std::vector<Complex>& samples,
+    double sample_rate_hz
+);
+
+std::vector<Complex> process_fixed(
+    const std::vector<Complex>& samples,
+    double sample_rate_hz
+);
+
+}  // namespace genesis_dsp
+'''
+
+
+def cpp_number(value: float) -> str:
+    return format(float(value), ".17g")
+
+
+def generate_cpp_source(
+    nodes: list[dict[str, Any]],
+    fixed_config: dict[str, Any],
+) -> str:
+    arithmetic = fixed_config["arithmetic"]
+    number_format = arithmetic["sample_and_coefficient_format"]
+
+    constants: dict[str, float] = {}
+    for node in nodes:
+        block_id = str(node["block_id"])
+        parameters = dict(node.get("parameters", {}))
+        if block_id == "complex_gain":
+            constants["gain_real"] = float(parameters.get("gain_real", 1.0))
+            constants["gain_imag"] = float(parameters.get("gain_imag", 0.0))
+        elif block_id == "causal_dc_blocker":
+            constants["pole_radius"] = float(
+                parameters.get("pole_radius", 0.995)
+            )
+        elif block_id == "frequency_shift":
+            constants["frequency_hz"] = float(
+                parameters.get("frequency_hz", 0.0)
+            )
+            constants["initial_phase_degrees"] = float(
+                parameters.get("initial_phase_degrees", 0.0)
+            )
+
+    source = r'''#include "genesis_dsp_export.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <complex>
+#include <cstdint>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace genesis_dsp {
+namespace {
+
+constexpr int INTEGER_BITS = __INTEGER_BITS__;
+constexpr int FRACTIONAL_BITS = __FRACTIONAL_BITS__;
+constexpr int PHASE_BITS = __PHASE_BITS__;
+constexpr double SCALE = static_cast<double>(1ULL << FRACTIONAL_BITS);
+constexpr double MINIMUM_VALUE = -static_cast<double>(1ULL << (INTEGER_BITS - 1));
+constexpr double MAXIMUM_VALUE =
+    static_cast<double>(1ULL << (INTEGER_BITS - 1)) - 1.0 / SCALE;
+constexpr double PI = 3.141592653589793238462643383279502884;
+
+constexpr double GAIN_REAL = __GAIN_REAL__;
+constexpr double GAIN_IMAG = __GAIN_IMAG__;
+constexpr double POLE_RADIUS = __POLE_RADIUS__;
+constexpr double FREQUENCY_HZ = __FREQUENCY_HZ__;
+constexpr double INITIAL_PHASE_DEGREES = __INITIAL_PHASE_DEGREES__;
+
+inline double quantize_real(double value) {
+    const double clipped = std::clamp(value, MINIMUM_VALUE, MAXIMUM_VALUE);
+    return std::nearbyint(clipped * SCALE) / SCALE;
+}
+
+inline Complex quantize_complex(const Complex& value) {
+    return Complex(
+        quantize_real(value.real()),
+        quantize_real(value.imag())
+    );
+}
+
+void validate_input(
+    const std::vector<Complex>& samples,
+    double sample_rate_hz
+) {
+    if (!std::isfinite(sample_rate_hz) || sample_rate_hz <= 0.0) {
+        throw std::invalid_argument("sample_rate_hz must be positive and finite");
+    }
+
+    for (const Complex& value : samples) {
+        if (!std::isfinite(value.real()) || !std::isfinite(value.imag())) {
+            throw std::invalid_argument("samples must be finite");
+        }
+    }
+}
+
+std::vector<Complex> apply_gain_float(std::vector<Complex> current) {
+    const Complex gain(GAIN_REAL, GAIN_IMAG);
+    for (Complex& value : current) {
+        value *= gain;
+    }
+    return current;
+}
+
+std::vector<Complex> apply_dc_float(std::vector<Complex> current) {
+    std::vector<Complex> output(current.size());
+    Complex previous_input(0.0, 0.0);
+    Complex previous_output(0.0, 0.0);
+
+    for (std::size_t index = 0; index < current.size(); ++index) {
+        const Complex result =
+            current[index] - previous_input + POLE_RADIUS * previous_output;
+        output[index] = result;
+        previous_input = current[index];
+        previous_output = result;
+    }
+    return output;
+}
+
+std::vector<Complex> apply_shift_float(
+    std::vector<Complex> current,
+    double sample_rate_hz
+) {
+    const double initial_phase = INITIAL_PHASE_DEGREES * PI / 180.0;
+    for (std::size_t index = 0; index < current.size(); ++index) {
+        const double phase =
+            2.0 * PI * FREQUENCY_HZ * static_cast<double>(index)
+            / sample_rate_hz
+            + initial_phase;
+        current[index] *= Complex(std::cos(phase), std::sin(phase));
+    }
+    return current;
+}
+
+std::vector<Complex> apply_gain_fixed(std::vector<Complex> current) {
+    const Complex gain = quantize_complex(Complex(GAIN_REAL, GAIN_IMAG));
+    for (Complex& value : current) {
+        value = quantize_complex(value * gain);
+    }
+    return current;
+}
+
+std::vector<Complex> apply_dc_fixed(std::vector<Complex> current) {
+    const double pole = quantize_real(POLE_RADIUS);
+    std::vector<Complex> output(current.size());
+    Complex previous_input(0.0, 0.0);
+    Complex previous_output(0.0, 0.0);
+
+    for (std::size_t index = 0; index < current.size(); ++index) {
+        const Complex current_input = quantize_complex(current[index]);
+        const Complex result =
+            current_input - previous_input + pole * previous_output;
+        const Complex current_output = quantize_complex(result);
+        output[index] = current_output;
+        previous_input = current_input;
+        previous_output = current_output;
+    }
+    return output;
+}
+
+std::vector<Complex> apply_shift_fixed(
+    std::vector<Complex> current,
+    double sample_rate_hz
+) {
+    const std::int64_t phase_modulus =
+        static_cast<std::int64_t>(1) << PHASE_BITS;
+    const std::int64_t increment_word = static_cast<std::int64_t>(
+        std::nearbyint(
+            FREQUENCY_HZ / sample_rate_hz
+            * static_cast<double>(phase_modulus)
+        )
+    );
+    const std::int64_t initial_phase_word = static_cast<std::int64_t>(
+        std::nearbyint(
+            INITIAL_PHASE_DEGREES / 360.0
+            * static_cast<double>(phase_modulus)
+        )
+    );
+
+    for (std::size_t index = 0; index < current.size(); ++index) {
+        std::int64_t phase_word =
+            (initial_phase_word
+             + increment_word * static_cast<std::int64_t>(index))
+            % phase_modulus;
+
+        if (phase_word < 0) {
+            phase_word += phase_modulus;
+        }
+
+        const double phase =
+            2.0 * PI * static_cast<double>(phase_word)
+            / static_cast<double>(phase_modulus);
+        const Complex oscillator = quantize_complex(
+            Complex(std::cos(phase), std::sin(phase))
+        );
+        current[index] = quantize_complex(current[index] * oscillator);
+    }
+    return current;
+}
+
+}  // namespace
+
+std::vector<Complex> process_float(
+    const std::vector<Complex>& samples,
+    double sample_rate_hz
+) {
+    validate_input(samples, sample_rate_hz);
+    std::vector<Complex> current = samples;
+__FLOAT_PIPELINE__
+    return current;
+}
+
+std::vector<Complex> process_fixed(
+    const std::vector<Complex>& samples,
+    double sample_rate_hz
+) {
+    validate_input(samples, sample_rate_hz);
+    std::vector<Complex> current(samples.size());
+    for (std::size_t index = 0; index < samples.size(); ++index) {
+        current[index] = quantize_complex(samples[index]);
+    }
+__FIXED_PIPELINE__
+    return current;
+}
+
+}  // namespace genesis_dsp
+
+namespace {
+
+std::vector<genesis_dsp::Complex> read_csv(const std::string& path) {
+    std::ifstream input(path);
+    if (!input) {
+        throw std::runtime_error("Cannot open input CSV: " + path);
+    }
+
+    std::vector<genesis_dsp::Complex> samples;
+    std::string line;
+    std::getline(input, line);
+
+    while (std::getline(input, line)) {
+        if (line.empty()) {
+            continue;
+        }
+        const std::size_t comma = line.find(',');
+        if (comma == std::string::npos) {
+            throw std::runtime_error("Invalid CSV line");
+        }
+        samples.emplace_back(
+            std::stod(line.substr(0, comma)),
+            std::stod(line.substr(comma + 1))
+        );
+    }
+    return samples;
+}
+
+void write_csv(
+    const std::string& path,
+    const std::vector<genesis_dsp::Complex>& samples
+) {
+    std::ofstream output(path);
+    if (!output) {
+        throw std::runtime_error("Cannot open output CSV: " + path);
+    }
+
+    output << "real,imag\n" << std::setprecision(17);
+    for (const genesis_dsp::Complex& value : samples) {
+        output << value.real() << "," << value.imag() << "\n";
+    }
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+    try {
+        if (argc != 4) {
+            std::cerr
+                << "Usage: genesis_dsp_export <input.csv> <output.csv> "
+                << "<sample_rate_hz>\n";
+            return 2;
+        }
+
+        const auto samples = read_csv(argv[1]);
+        const double sample_rate_hz = std::stod(argv[3]);
+        const auto output = genesis_dsp::process_fixed(
+            samples,
+            sample_rate_hz
+        );
+        write_csv(argv[2], output);
+        return 0;
+    }
+    catch (const std::exception& error) {
+        std::cerr << error.what() << "\n";
+        return 1;
+    }
+}
+'''
+
+    float_calls: list[str] = []
+    fixed_calls: list[str] = []
+    for node in nodes:
+        block_id = str(node["block_id"])
+        if block_id == "complex_gain":
+            float_calls.append("    current = apply_gain_float(std::move(current));")
+            fixed_calls.append("    current = apply_gain_fixed(std::move(current));")
+        elif block_id == "causal_dc_blocker":
+            float_calls.append("    current = apply_dc_float(std::move(current));")
+            fixed_calls.append("    current = apply_dc_fixed(std::move(current));")
+        elif block_id == "frequency_shift":
+            float_calls.append(
+                "    current = apply_shift_float(std::move(current), sample_rate_hz);"
+            )
+            fixed_calls.append(
+                "    current = apply_shift_fixed(std::move(current), sample_rate_hz);"
+            )
+
+    replacements = {
+        "__INTEGER_BITS__": str(int(number_format["integer_bits"])),
+        "__FRACTIONAL_BITS__": str(int(number_format["fractional_bits"])),
+        "__PHASE_BITS__": str(int(arithmetic["nco_phase_accumulator_bits"])),
+        "__GAIN_REAL__": cpp_number(constants.get("gain_real", 1.0)),
+        "__GAIN_IMAG__": cpp_number(constants.get("gain_imag", 0.0)),
+        "__POLE_RADIUS__": cpp_number(constants.get("pole_radius", 0.995)),
+        "__FREQUENCY_HZ__": cpp_number(constants.get("frequency_hz", 0.0)),
+        "__INITIAL_PHASE_DEGREES__": cpp_number(
+            constants.get("initial_phase_degrees", 0.0)
+        ),
+        "__FLOAT_PIPELINE__": "\n".join(float_calls),
+        "__FIXED_PIPELINE__": "\n".join(fixed_calls),
+    }
+
+    for key, value in replacements.items():
+        source = source.replace(key, value)
+
+    return source
+
+
+def write_complex_csv(path: Path, samples: np.ndarray) -> None:
+    with path.open("w", encoding="utf-8", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerow(["real", "imag"])
+        for value in samples:
+            writer.writerow(
+                [
+                    format(float(value.real), ".17g"),
+                    format(float(value.imag), ".17g"),
+                ]
+            )
+
+
+def read_complex_csv(path: Path) -> np.ndarray:
+    values: list[complex] = []
+    with path.open("r", encoding="utf-8", newline="") as file:
+        reader = csv.DictReader(file)
+        for row in reader:
+            values.append(
+                complex(
+                    float(row["real"]),
+                    float(row["imag"]),
+                )
+            )
+    return np.asarray(values, dtype=np.complex128)
+
+
+def import_generated_python(path: Path) -> Any:
+    specification = importlib.util.spec_from_file_location(
+        "genesis_dsp_generated_export",
+        path,
+    )
+    if specification is None or specification.loader is None:
+        raise ImportError("Generated Python export yüklenemedi.")
+
+    module = importlib.util.module_from_spec(specification)
+    sys.modules[specification.name] = module
+    specification.loader.exec_module(module)
+    return module
+
+
+def maximum_error(reference: np.ndarray, measured: np.ndarray) -> float:
+    if reference.shape != measured.shape:
+        raise ValueError("Karşılaştırılan çıktı boyutları eşleşmiyor.")
+
+    return float(np.max(np.abs(measured - reference)))
+
+
+def find_cpp_compiler() -> tuple[str | None, str | None]:
+    for executable in ("g++", "clang++"):
+        path = shutil.which(executable)
+        if path is not None:
+            return executable, path
+    return None, None
+
+
+def compile_and_test_cpp(
+    sample_rate_hz: float,
+    expected_output: np.ndarray,
+) -> dict[str, Any]:
+    compiler_name, compiler_path = find_cpp_compiler()
+
+    if compiler_name is None or compiler_path is None:
+        return {
+            "status": "SKIPPED_NO_COMPILER",
+            "compiler": None,
+            "maximum_error": None,
+            "note": (
+                "g++ veya clang++ bulunamadı; "
+                "C++17 kaynakları yine de üretildi."
+            ),
+        }
+
+    executable_name = (
+        "genesis_dsp_export_test.exe"
+        if sys.platform.startswith("win")
+        else "genesis_dsp_export_test"
+    )
+    executable_path = STEP22_DIRECTORY / executable_name
+
+    compile_result = subprocess.run(
+        [
+            compiler_path,
+            "-std=c++17",
+            "-O2",
+            str(CPP_SOURCE_PATH),
+            "-o",
+            str(executable_path),
+        ],
+        cwd=STEP22_DIRECTORY,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    if compile_result.returncode != 0:
+        raise RuntimeError(
+            "C++ export derlenemedi:\n"
+            + compile_result.stderr
+        )
+
+    run_result = subprocess.run(
+        [
+            str(executable_path),
+            str(INPUT_CSV_PATH),
+            str(CPP_OUTPUT_PATH),
+            format(sample_rate_hz, ".17g"),
+        ],
+        cwd=STEP22_DIRECTORY,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    if run_result.returncode != 0:
+        raise RuntimeError(
+            "C++ export çalıştırılamadı:\n"
+            + run_result.stderr
+        )
+
+    cpp_output = read_complex_csv(CPP_OUTPUT_PATH)
+    cpp_error = maximum_error(expected_output, cpp_output)
+
+    if cpp_error > CPP_FIXED_TOLERANCE:
+        raise RuntimeError(
+            "C++ fixed-point export referansla eşleşmedi."
+        )
+
+    return {
+        "status": "PASSED",
+        "compiler": compiler_name,
+        "compiler_path": compiler_path,
+        "maximum_error": cpp_error,
+        "executable": str(executable_path),
+        "note": "C++17 export derlendi ve test vektörünü geçti.",
+    }
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as file:
+        while True:
+            block = file.read(1024 * 1024)
+            if not block:
+                break
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def write_cmake_file() -> None:
+    CMAKE_PATH.write_text(
+        '''cmake_minimum_required(VERSION 3.16)
+project(genesis_dsp_export LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+add_executable(
+    genesis_dsp_export
+    genesis_dsp_export.cpp
+)
+''',
+        encoding="utf-8",
+    )
+
+
+def main() -> None:
+    STEP22_DIRECTORY.mkdir(parents=True, exist_ok=True)
+
+    (
+        graph,
+        package_document,
+        fixed_config,
+        input_samples,
+        floating_reference,
+        fixed_reference,
+        sample_rate_hz,
+    ) = load_inputs()
+
+    nodes = ordered_nodes(graph)
+
+    PYTHON_EXPORT_PATH.write_text(
+        generate_python_source(nodes, fixed_config),
+        encoding="utf-8",
+    )
+    CPP_HEADER_PATH.write_text(
+        generate_cpp_header(),
+        encoding="utf-8",
+    )
+    CPP_SOURCE_PATH.write_text(
+        generate_cpp_source(nodes, fixed_config),
+        encoding="utf-8",
+    )
+    write_cmake_file()
+
+    write_complex_csv(INPUT_CSV_PATH, input_samples)
+    write_complex_csv(EXPECTED_CSV_PATH, fixed_reference)
+
+    generated_module = import_generated_python(PYTHON_EXPORT_PATH)
+    python_float_output = generated_module.process_float(
+        input_samples,
+        sample_rate_hz,
+    )
+    python_fixed_output = generated_module.process_fixed(
+        input_samples,
+        sample_rate_hz,
+    )
+
+    python_float_error = maximum_error(
+        floating_reference,
+        python_float_output,
+    )
+    python_fixed_error = maximum_error(
+        fixed_reference,
+        python_fixed_output,
+    )
+    repeated_fixed_output = generated_module.process_fixed(
+        input_samples,
+        sample_rate_hz,
+    )
+    python_determinism_error = maximum_error(
+        python_fixed_output,
+        repeated_fixed_output,
+    )
+
+    if python_float_error > PYTHON_FLOAT_TOLERANCE:
+        raise RuntimeError(
+            "Generated Python floating-point export referansla eşleşmedi."
+        )
+
+    if python_fixed_error > PYTHON_FIXED_TOLERANCE:
+        raise RuntimeError(
+            "Generated Python fixed-point export referansla bit-exact eşleşmedi."
+        )
+
+    if python_determinism_error != 0.0:
+        raise RuntimeError(
+            "Generated Python export deterministik değil."
+        )
+
+    cpp_test = compile_and_test_cpp(
+        sample_rate_hz,
+        fixed_reference,
+    )
+
+    exported_files = [
+        PYTHON_EXPORT_PATH,
+        CPP_HEADER_PATH,
+        CPP_SOURCE_PATH,
+        CMAKE_PATH,
+        INPUT_CSV_PATH,
+        EXPECTED_CSV_PATH,
+    ]
+    if CPP_OUTPUT_PATH.exists():
+        exported_files.append(CPP_OUTPUT_PATH)
+
+    manifest = {
+        "schema_name": "GENESIS-DSP ExportManifest",
+        "schema_version": "1.0.0",
+        "source_pipeline_id": package_document["pipeline_id"],
+        "sample_rate_hz": sample_rate_hz,
+        "node_order": [
+            {
+                "node_id": str(node["node_id"]),
+                "block_id": str(node["block_id"]),
+                "parameters": dict(node.get("parameters", {})),
+            }
+            for node in nodes
+        ],
+        "files": [
+            {
+                "filename": path.name,
+                "size_bytes": path.stat().st_size,
+                "sha256": sha256_file(path),
+            }
+            for path in exported_files
+        ],
+    }
+    save_json(MANIFEST_PATH, manifest)
+
+    report = {
+        "project": "GENESIS-DSP",
+        "step": 22,
+        "description": "Standalone Python and C++17 pipeline code export",
+        "source_pipeline_id": package_document["pipeline_id"],
+        "exported_node_count": len(nodes),
+        "python_export": {
+            "path": str(PYTHON_EXPORT_PATH),
+            "floating_point_maximum_error": python_float_error,
+            "fixed_point_maximum_error": python_fixed_error,
+            "determinism_maximum_error": python_determinism_error,
+            "status": "PASSED",
+        },
+        "cpp_export": {
+            "header_path": str(CPP_HEADER_PATH),
+            "source_path": str(CPP_SOURCE_PATH),
+            "cmake_path": str(CMAKE_PATH),
+            "test": cpp_test,
+        },
+        "fixed_point_format": fixed_config["arithmetic"],
+        "manifest_path": str(MANIFEST_PATH),
+        "validations": {
+            "python_float_equivalence": True,
+            "python_fixed_bit_exact_equivalence": True,
+            "python_deterministic_reexecution": True,
+            "cpp_source_generated": True,
+            "cpp_compile_test_passed_or_skipped_without_compiler": True,
+            "sha256_manifest_generated": True,
+        },
+    }
+    save_json(REPORT_PATH, report)
+
+    print()
+    print("=" * 88)
+    print("GENESIS-DSP — ADIM 22 BAŞARIYLA TAMAMLANDI")
+    print("=" * 88)
+    print(f"Export edilen DSP düğümü        : {len(nodes)}")
+    print(f"Python float maksimum hata       : {python_float_error:.3e}")
+    print(f"Python fixed maksimum hata       : {python_fixed_error:.3e}")
+    print(f"Python determinism hatası        : {python_determinism_error:.3e}")
+    print("Python standalone export         : BAŞARILI")
+    print(f"C++17 compile/test durumu        : {cpp_test['status']}")
+
+    if cpp_test["maximum_error"] is not None:
+        print(
+            f"C++ fixed maksimum hata          : "
+            f"{float(cpp_test['maximum_error']):.3e}"
+        )
+
+    print(f"Python export                    : {PYTHON_EXPORT_PATH}")
+    print(f"C++ header                       : {CPP_HEADER_PATH}")
+    print(f"C++ source                       : {CPP_SOURCE_PATH}")
+    print(f"CMake                            : {CMAKE_PATH}")
+    print(f"SHA-256 manifest                 : {MANIFEST_PATH}")
+    print(f"Rapor                            : {REPORT_PATH}")
+    print("=" * 88)
+
+
+if __name__ == "__main__":
+    main()
