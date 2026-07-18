@@ -1,17 +1,4 @@
-"""
-GENESIS-DSP — Adım 01
-Temiz QPSK kompleks taban bant sinyali üretimi.
 
-Bu program:
-1. Rastgele bitler üretir.
-2. Bitleri QPSK sembollerine dönüştürür.
-3. Root Raised Cosine (RRC) pulse-shaping filtresi uygular.
-4. Ground-truth verilerini .npy ve .json dosyalarına kaydeder.
-5. Konstelasyon, zaman alanı ve spektrum grafiklerini üretir.
-
-Çalıştırma:
-    python 01_qpsk_generator.py
-"""
 
 from __future__ import annotations
 
