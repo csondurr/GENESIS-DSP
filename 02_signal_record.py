@@ -1,17 +1,4 @@
-"""
-GENESIS-DSP — Adım 02
-Ortak sinyal veri modeli ve doğrulama katmanı.
 
-Bu program:
-1. Adım 01 çıktısını yükler.
-2. Sinyal, bit, sembol ve örnekleme bilgilerini SignalRecord içinde toplar.
-3. Boyut, veri tipi, güç, zaman ekseni ve metadata tutarlılığını doğrular.
-4. Standartlaştırılmış GENESIS-DSP veri paketini kaydeder.
-5. Kaydedilen paketi yeniden yükleyerek bütünlük testi yapar.
-
-Çalıştırma:
-    python 02_signal_record.py
-"""
 
 from __future__ import annotations
 
