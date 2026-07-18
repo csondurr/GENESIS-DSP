@@ -1,19 +1,4 @@
-"""
-GENESIS-DSP — Adım 12
-Pipeline JSON kayıt, yükleme ve bütünlük doğrulama sistemi.
 
-Bu program:
-1. Adım 11 pipeline graph yapılandırmasını yükler.
-2. Graph'ı sürümlü bir GENESIS-DSP pipeline paketine dönüştürür.
-3. Canonical JSON üzerinden SHA-256 bütünlük özeti üretir.
-4. Paketi JSON dosyasına kaydeder ve yeniden yükler.
-5. Orijinal ve yeniden yüklenen graph çıktılarını karşılaştırır.
-6. Değiştirilmiş paketleri hash kontrolüyle reddeder.
-7. Round-trip ve execution raporları üretir.
-
-Çalıştırma:
-    python step12_pipeline_serialization.py
-"""
 
 from __future__ import annotations
 
