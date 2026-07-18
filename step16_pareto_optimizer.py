@@ -1,21 +1,4 @@
-"""
-GENESIS-DSP — Adım 16
-Çok amaçlı Pareto optimizasyon motoru.
 
-Bu program:
-1. Adım 13 optimize edilmiş blok parametrelerini yükler.
-2. DSP bloklarının tüm alt-küme ve sıralama topolojilerini değerlendirir.
-3. Üç amacı birlikte inceler:
-   - Veri hatası (NMSE)
-   - Tahmini işlem maliyeti
-   - Blok sayısı
-4. Baskın olmayan Pareto cephesini çıkarır.
-5. Normalize edilmiş utopia-distance ile dengeli knee çözümünü seçer.
-6. Pareto CSV, JSON raporu, grafik ve seçilen pipeline paketini üretir.
-
-Çalıştırma:
-    python step16_pareto_optimizer.py
-"""
 
 from __future__ import annotations
 
