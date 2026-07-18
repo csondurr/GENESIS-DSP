@@ -1,19 +1,3 @@
-"""
-GENESIS-DSP — Adım 17
-Bilinen DSP algoritmalarını yeniden keşfetme testi.
-
-Bu program:
-1. Bilinen bir kompleks sinyale DC offset, CFO ve kompleks gain bozunumu ekler.
-2. DSP bloklarının tüm alt-küme ve sıralamalarını aday topoloji olarak üretir.
-3. Her topoloji için frekans ve kompleks gain parametrelerini optimize eder.
-4. DC removal + frequency correction + complex gain recovery zincirini
-   herhangi bir doğru sıralamayla yeniden keşfeder.
-5. Bulunan pipeline'ı gerçek PipelineGraph motoruyla yeniden çalıştırır.
-6. Sonucu sürümlü JSON pipeline paketi, CSV, grafik ve rapor olarak kaydeder.
-
-Çalıştırma:
-    python step17_algorithm_rediscovery.py
-"""
 
 from __future__ import annotations
 
