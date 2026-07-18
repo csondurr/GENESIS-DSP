@@ -1,22 +1,4 @@
-"""
-GENESIS-DSP — Adım 14
-Kesikli DSP topoloji arama motoru.
 
-Bu program:
-1. Adım 13 optimize edilmiş pipeline paketini yükler.
-2. DC removal, frequency shift ve complex gain bloklarının tüm
-   alt-küme ve sıralama kombinasyonlarını üretir.
-3. Her aday graph'ı gerçek PipelineGraph motoruyla çalıştırır.
-4. Veri NMSE + karmaşıklık cezasıyla adayları sıralar.
-5. En iyi topolojiyi sürümlü pipeline paketi olarak kaydeder.
-6. Aday sıralaması, JSON raporu ve grafik üretir.
-
-Bu adım yalnızca kesikli yapıyı/topolojiyi arar.
-Sürekli parametreler Adım 13 sonucundan alınır.
-
-Çalıştırma:
-    python step14_topology_search.py
-"""
 
 from __future__ import annotations
 
