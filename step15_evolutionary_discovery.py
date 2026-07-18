@@ -1,23 +1,4 @@
-"""
-GENESIS-DSP — Adım 15
-Evrimsel DSP topoloji keşif motoru.
 
-Bu program:
-1. Adım 13 optimize edilmiş blok parametrelerini yükler.
-2. DSP topolojilerini sıralı-genom biçiminde temsil eder.
-3. Tournament selection, crossover, mutation ve elitism uygular.
-4. Exhaustive listeyi doğrudan taramadan iyi pipeline topolojisi keşfeder.
-5. Adım 14 exhaustive optimumuyla sonucu doğrular.
-6. En iyi pipeline paketini, nesil geçmişini ve raporları kaydeder.
-
-Genom örneği:
-    ("remove_dc", "downconvert", "constant_output")
-
-Genom uzunluğu ve blok sırası birlikte evrimleşir.
-
-Çalıştırma:
-    python step15_evolutionary_discovery.py
-"""
 
 from __future__ import annotations
 
