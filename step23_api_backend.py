@@ -1,27 +1,3 @@
-"""
-GENESIS-DSP — Adım 23
-FastAPI tabanlı DSP servis katmanı.
-
-Bu program:
-1. Adım 22 bağımsız Python DSP export'unu dinamik olarak yükler.
-2. Floating-point ve fixed-point işleme için FastAPI endpoint'leri oluşturur.
-3. Health, pipeline bilgisi ve OpenAPI şeması sunar.
-4. JSON IQ örneklerini doğrular ve işler.
-5. Varsayılan çalıştırmada API öz testini yapıp rapor üretir.
-6. --serve seçeneğiyle gerçek HTTP sunucusunu başlatır.
-
-Kurulum:
-    pip install fastapi uvicorn pydantic
-
-Öz test:
-    python step23_api_backend.py
-
-Sunucuyu başlat:
-    python step23_api_backend.py --serve
-
-Tarayıcı:
-    http://127.0.0.1:8000/docs
-"""
 
 from __future__ import annotations
 
