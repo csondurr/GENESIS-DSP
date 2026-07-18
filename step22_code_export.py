@@ -1,10 +1,4 @@
-"""
-GENESIS-DSP — Adım 22
-Bağımsız Python ve C++17 kod dışa aktarma sistemi.
 
-Çalıştırma:
-    python step22_code_export.py
-"""
 
 from __future__ import annotations
 
