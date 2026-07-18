@@ -1,23 +1,4 @@
-"""
-GENESIS-DSP — Adım 11
-DSP pipeline graph motoru.
 
-Bu program:
-1. Adım 10 BlockRegistry sistemini kullanır.
-2. DSP bloklarını düğüm ve kenarlardan oluşan yönlü çevrimsiz grafikte tanımlar.
-3. Graph doğrulaması, cycle detection ve topological sort yapar.
-4. Tek girişten dallanan DSP pipeline'larını çalıştırır.
-5. Her düğümün SignalFrame çıktısını ve yürütme kaydını saklar.
-6. JSON graph config, execution plan ve test raporu üretir.
-
-Not:
-Bu sürümde her DSP düğümü tek girişlidir. Bir düğümün birden fazla
-öncülü olamaz. Dallanma desteklenir; birleştirme blokları sonraki
-adımlarda ayrıca eklenecektir.
-
-Çalıştırma:
-    python step11_pipeline_graph.py
-"""
 
 from __future__ import annotations
 
