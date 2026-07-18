@@ -1,19 +1,3 @@
-"""
-GENESIS-DSP — Adım 19
-Falsification ve karşı-örnek arama motoru.
-
-Bu program:
-1. Adım 18'de keşfedilen sabit alıcı reçetesini yükler.
-2. Adım 06 nominal bozunum konfigürasyonunu başlangıç noktası kabul eder.
-3. Yapılandırılmış zor durumlar ve rastgele bozunum senaryoları üretir.
-4. Alıcıyı yeniden eğitmeden her senaryoda test eder.
-5. BER, EVM, NMSE ve CFO hatasına göre başarısızlık arar.
-6. En kötü senaryonun çevresinde ikinci bir yerel arama yapar.
-7. Tekrarlanabilir karşı-örnek, CSV, JSON, NPZ ve grafik üretir.
-
-Çalıştırma:
-    python step19_falsification_engine.py
-"""
 
 from __future__ import annotations
 
