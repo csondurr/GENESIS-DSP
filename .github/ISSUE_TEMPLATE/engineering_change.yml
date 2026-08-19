@@ -1,0 +1,38 @@
+name: Engineering change
+description: Propose a design, algorithm, interface, or validation improvement
+title: "[Change]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+      description: State the engineering objective and acceptance criteria.
+    validations:
+      required: true
+  - type: dropdown
+    id: evidence
+    attributes:
+      label: Planned evidence
+      options:
+        - Analytical
+        - Simulated
+        - Software-tested
+        - Physically measured
+        - Documentation only
+    validations:
+      required: true
+  - type: textarea
+    id: approach
+    attributes:
+      label: Proposed approach
+      description: Include affected files, interfaces, dependencies, and risks.
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation plan
+      description: Explain how success and failure will be measured.
+    validations:
+      required: true
