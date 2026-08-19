@@ -994,13 +994,17 @@ If this repository supports academic or engineering work, cite it as software:
 
 ---
 
+
+
+## Repository maintenance
+
+**Evidence boundary:** Software/numerical validation only. Reported recovery, optimization, falsification, and fixed-point results are not equivalent to independent RF-hardware certification.
+
+- [Validation record](docs/VALIDATION.md)
+- [Contribution guide](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+- [Citation metadata](CITATION.cff)
+
 ## License
 
-No explicit open-source license is currently included in the repository. Under default copyright rules, reuse, redistribution and modification rights are not automatically granted. Add a `LICENSE` file before presenting the project as licensed open-source software.
-
----
-
-<p align="center">
-  <strong>GENESIS-DSP</strong><br>
-  From synthetic IQ generation to a certified, fixed-point, API-accessible DSP runtime.
-</p>
+Copyright (c) 2026 Cem Sondur. Distributed under the [MIT License](LICENSE). Third-party components remain subject to their original licenses.

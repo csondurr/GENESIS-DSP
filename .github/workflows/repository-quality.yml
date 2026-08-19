@@ -1,0 +1,37 @@
+name: Repository quality
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  documentation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate repository documentation
+        shell: python
+        run: |
+          from pathlib import Path
+          required = ["README.md", "LICENSE", "CITATION.cff", "CONTRIBUTING.md", "SECURITY.md"]
+          missing = [p for p in required if not Path(p).is_file()]
+          if missing:
+              raise SystemExit(f"Missing required files: {missing}")
+          if len(Path("README.md").read_text(encoding="utf-8").strip()) < 500:
+              raise SystemExit("README.md is too short.")
+          markers = ("<<<<<<<", "=======", ">>>>>>>")
+          bad = []
+          for path in Path(".").rglob("*"):
+              if path.is_file() and path.suffix.lower() in {".md", ".m", ".py", ".r", ".c", ".h", ".json", ".yml", ".yaml"}:
+                  try:
+                      body = path.read_text(encoding="utf-8")
+                  except UnicodeDecodeError:
+                      continue
+                  if any(m in body for m in markers):
+                      bad.append(str(path))
+          if bad:
+              raise SystemExit(f"Merge-conflict markers found: {bad}")

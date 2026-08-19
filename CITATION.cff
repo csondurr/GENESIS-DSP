@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite it using the metadata below."
+title: "GENESIS-DSP"
+type: software
+authors:
+  - family-names: Sondur
+    given-names: Cem
+repository-code: "https://github.com/csondurr/GENESIS-DSP"
+license: MIT
+date-released: 2026-07-18
